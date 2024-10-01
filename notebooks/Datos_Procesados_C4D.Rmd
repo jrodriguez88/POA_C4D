@@ -32,7 +32,7 @@ Este libro contienen una rapida descripcion y visualizacion de los datos trabaja
 
 Iniciaremos cargando los diferentes conjuntos de datos procesados a partir de los libros de datos maestros. La informacion esta guardada en formato `*.RData` del lenguaje de programacion R. 
 
-Los conjuntos de datos se encuentran alojados en [OneDrive](https://partnersnet107.sharepoint.com/:f:/r/sites/EDHC4D/Shared%20Documents/M%26E%20C4D/z13.Equipo%20M%26E/Consultores/2021-02%20Consultor%C3%ADa%20Miner%C3%ADa%20de%20datos/2024-02%20Miner%C3%ADa%20de%20Datos%20-%20Compartida%20Consultor/2_archivos_procesados/R_data?csf=1&web=1&e=V5GSsL)
+Los conjuntos de datos se encuentran alojados en [OneDrive]
 
 
 ```{r loading_data}
@@ -111,7 +111,7 @@ Character = data_raw %>%
 ```
 
 Los libros de datos cuentan con una extensa Longitud en los nombres de variables, tipico de valores recolectados por encuestas.
-La Longitud de los nombres de variables Caracterizacion,  Plan de Gestion de Finca y Productividad es en promedio :`r names(caracterizacion) %>% map_dbl(nchar) %>% mean`, `r names(plan_gestion_finca) %>% map_dbl(nchar) %>% mean` y `r names(productividad) %>% map_dbl(nchar) %>% mean`, respectivamente.
+La Longitud de los nombres de variables Caracterizacion,  Plan de Gestion de Finca y Productividad es en promedio :`r names(caracterizacion) %>% map_dbl(nchar) %>% mean %>% round`,  `r names(plan_gestion_finca) %>% map_dbl(nchar) %>% mean %>% round` y  `r names(productividad) %>% map_dbl(nchar) %>% mean %>% round`, respectivamente.
 
 ## Reduccion de dimensionalidad y Seleccion de Caracteristicas
 
@@ -252,7 +252,7 @@ ggplot() +
 
 ## Datos de factores de exito - Estrategia de extension
 
-Se recodificaron los valores de la estrategia de extension y factoees de exito, se realiza un analisis de frecuencia de visitas donde se encuentra que el promedio de dias entre visistas es de `r mean(promedio_visitas$promedio_dias_entre_visitas, na.rm = T)`.
+Se recodificaron los valores de la estrategia de extension y factoees de exito, se realiza un analisis de frecuencia de visitas donde se encuentra que el promedio de dias entre visistas es de `r mean(promedio_visitas$promedio_dias_entre_visitas, na.rm = T) %>% round`.
 Asi mismo, se encuentra que cerca de la mitad de los productores han presentado retrasos en su ultima visita, siendo la ultima visita la que mas tiempo ha tardado.
 
 ```{r factores_exito, echo = FALSE, message = FALSE, warning=FALSE, out.width="100%"}
