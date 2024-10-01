@@ -1,0 +1,302 @@
+---
+title: "Bases de Datos Generados en el Proyecto C4D" 
+subtitle: "Entrega parcial del 3er producto."
+author: "Rodriguez-Espinoza, J."
+output: 
+  html_document:
+    theme: cosmo
+    highlight: monochrome
+    toc: true
+    toc_float: false
+    toc_depth: 4
+    code_folding: hide
+    css: styles.css
+---
+
+```{r setup, include=FALSE, echo = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(readxl)
+library(naniar)
+library(stringdist)
+library(corrr)
+library(skimr)
+library(visdat)
+source("../scripts/funciones_poa_c4d.R")
+
+```
+
+Este libro contienen una rapida descripcion y visualizacion de los datos trabajados en el marco de la consultoria con C4D, los scripts para su procesamiento pueden ser encontrados en el repositorio: https://github.com/jrodriguez88/POA_C4D
+
+## Carga de datos procesados
+
+Iniciaremos cargando los diferentes conjuntos de datos procesados a partir de los libros de datos maestros. La informacion esta guardada en formato `*.RData` del lenguaje de programacion R. 
+
+Los conjuntos de datos se encuentran alojados en [OneDrive](https://partnersnet107.sharepoint.com/:f:/r/sites/EDHC4D/Shared%20Documents/M%26E%20C4D/z13.Equipo%20M%26E/Consultores/2021-02%20Consultor%C3%ADa%20Miner%C3%ADa%20de%20datos/2024-02%20Miner%C3%ADa%20de%20Datos%20-%20Compartida%20Consultor/2_archivos_procesados/R_data?csf=1&web=1&e=V5GSsL)
+
+
+```{r loading_data}
+
+# load data
+
+# Contiene los datos importados del repositorio de Onedrive
+load("../data/2_archivos_procesados/data_raw.RData")
+
+# Contiene los datos resultado del proceso de reduccion de dimensionalidad
+load("../data/2_archivos_procesados/data_selected.RData")
+
+# Contiene las variables por libro de datos seleccionadas y sin outliers
+load("../data/2_archivos_procesados/data_no_outliers.RData")
+
+# Contiene Datos de rendimiento base (Calculado de caracterizacion) y por periodos mensuales y años del proyecto
+# Contiene analisis de picos de cosecha
+load("../data/2_archivos_procesados/rendimiento_base.RData")
+
+# Contiene datos del plan de gestion de finca, seleccionan factores de exito
+# Contiene analisis de visitas y frecuencias temporales
+load("../data/2_archivos_procesados/test_factores_exito.RData")
+
+# Contiene datos de precipitacion derivados de https://chc.ucsb.edu/data https://www.nature.com/articles/sdata201566
+# Extraccion de informacion por cada productor
+load("../data/2_archivos_procesados/rain_chirps_v2_C4D.RData")
+
+# Contiene datos del componente de SIG, datos de latitud y longitud por centroide de area de cultivo
+load("../data/2_archivos_procesados/spatial_C4D.RData")
+
+```
+## Descripcion de datos crudos - Data Maestra
+
+Existen tres tablas de datos que reunen la informacion correspondiente a Caracterizacion de los productores, Plan de Gestion de Finca y Registros de produccion y ventas de Cacao a lo largo del proyecto. a continuacion se presentan algunas caractaristicas generales
+
+```{r Raw data, warning=FALSE}
+
+data_raw <- list(caracterizacion, plan_gestion_finca, productividad) %>%
+  set_names(c("Libro_Caracterizacion", 
+                 "Libro_Plan_Gestion_Finca", 
+                 "Libro_Productividad"))
+
+print("Dimension de los libros de datos")
+
+# Data Overview, dimension, variable class, and missing values proportion
+## Dimension 
+data_raw %>%
+  map(dim) %>% bind_rows() %>% 
+  cbind(tibble(Dim = c("Registros", "Variables")), .)
+  
+## Variables classes
+print("Variables por clase de datos")
+data_raw %>%
+  map(~ .x %>% map(class) %>% enframe %>% unnest(value)) %>% 
+  map(~table(.x$value)) %>% bind_rows(.id = "Data")
+
+## Missing values exploratory
+print("Porcentaje de valores faltantes")
+data_raw %>%
+  map_dbl(pct_miss)
+
+## Visualizar por porcentaje de datos faltantes por clase de datos
+print(("Porcentaje de datos faltantes por clase de datos"))
+bind_rows(Logical = data_raw %>%
+  map(~.x %>% select(where(is.logical))) %>%
+  map_dbl(pct_miss),
+
+Numeric = data_raw %>%
+  map(~.x %>% select(where(is.numeric))) %>%
+  map_dbl(pct_miss),
+
+Character = data_raw %>%
+  map(~.x %>% select(where(is.character))) %>%
+  map_dbl(pct_miss), .id = "Clase")
+
+```
+
+Los libros de datos cuentan con una extensa Longitud en los nombres de variables, tipico de valores recolectados por encuestas.
+La Longitud de los nombres de variables Caracterizacion,  Plan de Gestion de Finca y Productividad es en promedio :`r names(caracterizacion) %>% map_dbl(nchar) %>% mean`, `r names(plan_gestion_finca) %>% map_dbl(nchar) %>% mean` y `r names(productividad) %>% map_dbl(nchar) %>% mean`, respectivamente.
+
+## Reduccion de dimensionalidad y Seleccion de Caracteristicas
+
+Considerando que las tablas de datos tiene un gran numero de variables se aplicaron metodos de reduccion de la dimensionalidad basado en 4 filtros:
+
+- Por prorcentaje de datos faltantes (Variables con NA < 80%) 
+- Por varianza cero (<0.01)
+- por redundancia y alta correlacion
+- Por criterio experto
+ 
+Los detalles del proceso se documentan en el script `02_Reduccion_dimensionalidad.R`
+
+### Caracterizacion
+Se presenta el resumen de la informacion seleccionada del libro de caracterizacion.
+
+```{r Caracterizacion, warning=FALSE, out.width="100%"}
+skim(caracterizacion_to_join)
+
+histograma_c4d_data(caracterizacion_to_join)
+
+#barplot_c4d(caracterizacion_no_outliers)
+```
+
+### Plan de Gestion de Finca
+Se presenta el resumen de la informacion seleccionada del libro de Plan de Gestion de Finca.
+
+```{r PGF, warning=FALSE, warning=FALSE,  out.width="100%"}
+skim(pgf_to_join)
+
+histograma_c4d_data(pgf_to_join)
+
+#barplot_c4d(pgf_no_outliers)
+```
+
+
+### Productividad
+Se presenta el resumen de la informacion seleccionada del libro de Productividad
+  
+```{r Productividad, warning=FALSE,warning=FALSE, out.width="100%"}
+skim(productividad_to_join)
+
+histograma_c4d_data(productividad_to_join)
+
+#barplot_c4d(productividad_no_outliers)
+```
+
+
+
+### Visualizacion de datos faltantes
+
+Se presenta una visualizacion de datos faltantes en cada libro de datos.
+
+```{r overview_faltantes, out.width="100%, warning=FALSE"}
+# datos de analisis
+
+libros_list <- list(caracterizacion_to_join, pgf_to_join, productividad_to_join) 
+  
+libros_names <- c("Libro_Caracterizacion", 
+                 "Libro_Plan_Gestion_Finca", 
+                 "Libro_Productividad")
+
+libros_ids <- list(caracterizacion_to_join$ID_Productor, 
+                   pgf_to_join$ID_Productor, 
+                   productividad_to_join$ID_Productor)
+
+map2(.x = libros_list, 
+     .y = libros_names, 
+     ~vis_dat(.x, warn_large_data = FALSE) + 
+       labs(title = .y) +
+       scale_fill_viridis_d(, option = "D", direction = -1))
+
+
+# calcula porcentaje de datos faltantes luego de reemplazo de outliers
+list(original =libros_list %>% map(pct_miss) %>% set_names(libros_names) %>% 
+  bind_rows(),
+
+oulier_replace_na = libros_list %>% 
+  map(~.x %>% mutate(across(where(is.numeric), replace_outlier))) %>% 
+        map(pct_miss) %>% set_names(libros_names)) %>% bind_rows(.id = "Status")
+```
+
+
+
+
+## Datos de Rendimiento
+Se procesaron los datos de produccion y se estimaron indicadores como rendimiento por area y por arbol, asi mismo la densidad de siembra y los valores estimados de rendimiento para los ciclos de analisis 2022_2023 y 2023_2024. 
+
+Ver script `graficos_productividad_poa_c4d.R`
+
+```{r rendimiento, echo = FALSE, message = FALSE, warning=FALSE, out.width="100%"}
+histograma_c4d_data(comparativa_productividad)
+
+# Grafico de comparacion de rendimiento
+comparativa_productividad   %>%
+select(ID_Productor, departamento, contains("rendimiento"), -contains("arbol")) %>% 
+  mutate(departamento = fct_reorder(departamento, rendimiento_2023_2024, .fun='mean')) %>% 
+  select(-rendimiento_linea_base ) %>%
+  pivot_longer(-c(ID_Productor, departamento)) %>%
+  mutate(name = factor(name, levels = c("rendimiento_2022_2023", "rendimiento_2023_2024"))) %>%
+  ggplot(aes(x = reorder(departamento, value),
+             y = value, color = name, fill = name)) +
+  stat_summary(fun.data=mean_cl_boot, position=position_dodge(0.5), geom="errorbar")+
+  stat_summary(fun.data=mean_cl_boot, position=position_dodge(0.5), 
+               size=3, shape=21, geom = "point") + 
+  # geom_vline(xintercept = mean(rendimiento_base$rendimiento_area_produccion, na.rm = T), col = "red", linewidth = 1.2) + 
+  # annotate(y=mean(rendimiento_base$rendimiento_area_produccion, na.rm = T),
+  #        x=+Inf,label="Target Date",vjust=2,geom="label")
+  coord_flip() + theme_minimal(14) +
+  theme(legend.position = "bottom") +
+  labs(title = "Comparativa Rendimiento del Cacao",
+       x = "Departamento", y = "Kg/ha", fill = "Periodo:", color = "Periodo:") +
+  scale_fill_viridis_d()
+
+# Grafico de picos de cosecha
+ggplot() +
+  geom_col( data = productividad_mensual_summary, aes(mes_reg, registros, fill  = factor(year_registro)), position = "dodge") +
+  geom_rect(data = picos_cosecha,
+            aes(xmin = as.numeric(mes_reg) - 0.4, xmax = as.numeric(mes_reg) + 0.4,
+                ymin = -Inf, ymax = Inf),
+            fill = "red", alpha = 0.3, inherit.aes = FALSE) +
+  facet_wrap(~departamento, scales = "free") + theme_bw() + 
+  theme(legend.position = c(0.75, 0.1),
+        strip.background =element_rect(fill="white"),
+        legend.box.background = element_rect(colour = "black"),
+        strip.text = element_text (face = "bold")) +
+  labs(title = "Analisis de picos de cosecha", x = NULL, y = " Numero de Registros de venta", 
+       fill = "Año de Registro") +
+  scale_fill_viridis_d()
+
+
+
+
+
+
+```
+
+
+
+## Datos de factores de exito - Estrategia de extension
+
+Se recodificaron los valores de la estrategia de extension y factoees de exito, se realiza un analisis de frecuencia de visitas donde se encuentra que el promedio de dias entre visistas es de `r mean(promedio_visitas$promedio_dias_entre_visitas, na.rm = T)`.
+Asi mismo, se encuentra que cerca de la mitad de los productores han presentado retrasos en su ultima visita, siendo la ultima visita la que mas tiempo ha tardado.
+
+```{r factores_exito, echo = FALSE, message = FALSE, warning=FALSE, out.width="100%"}
+
+# Proporcion de ususarios donde su ultima visita fue la mas tardada
+table(promedio_visitas$max_lag_last_visit)
+
+promedio_visitas %>% 
+  left_join(caracterizacion_to_join  %>% 
+              select(ID_Productor, departamento, status)) %>% 
+  filter(status == "Activo") %>%
+  
+  ggplot(aes(departamento, promedio_dias_entre_visitas)) +#, label1 = ID_Productor)) +
+  # geom_violin(trim=FALSE) + 
+  geom_jitter(aes(label1 = ID_Productor), alpha = 0.5, position = position_jitter(width =0.3)) +
+  # stat_summary(fun.data=mean_sdl, mult=1, 
+  #               geom="crossbar", width=0.7 , fill = "lightgrey", alpha =0.7) +
+  
+  geom_boxplot(fill = "lightgray", alpha =0.3, color = "darkred", 
+               linewidth = 1, outliers = FALSE, width=0.8) +
+  coord_flip() +
+  # facet_wrap(~departamento, scales = "free") + 
+  theme_bw() + labs(title = "Frecuencia de visita - Promedio en dias", x = "# de dias", y = "Departamento")
+
+
+
+
+
+```
+
+## Datos de Precipitacion
+
+Contiene informacion de precipitacion extraida de CHIRPS para cada productor. https://chc.ucsb.edu/data https://www.nature.com/articles/sdata201566
+
+```{r precipitacion, echo = FALSE, message = FALSE, warning=FALSE, out.width="100%"}
+comparison_rain %>% pivot_longer(cols = c(rain_2022_2024, rain_climatology)) %>%
+  ggplot() +
+  geom_boxplot(aes(departamento, value, fill = name)) +
+  theme_bw() + labs(title = "Precipitacion Anual por Departamento", 
+                    y = "Precipitacion (mm)", x = NULL,
+                    fill = "Periodo: ") +
+  theme(legend.position = "bottom") +
+  theme(axis.text.x = element_text(angle = 45, vjust = 0.5, hjust=1))
+                    
+```                    
+                    
+                    
